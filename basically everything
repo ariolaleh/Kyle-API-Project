@@ -1,1 +1,362 @@
-#basically post all code here guys
+import random
+import time
+
+# Game data storage
+game_state = {
+    "player": {"health": 100, "max_health": 500, "attack": 50, "defense": 10, "heal_uses": 10},
+    "enemy": {},
+    "turn": "player",
+    "enemies_defeated": 0,
+    "difficulty_level": 1
+}
+
+# Expanded enemy types
+enemies = {
+    # Basic enemies
+    "goblin": {"health": 60, "attack": 10, "defense": 5, "exp": 10, 
+               "description": "A small, green creature with sharp teeth and claws."},
+    "orc": {"health": 100, "attack": 18, "defense": 8, "exp": 20, 
+            "description": "A brutish humanoid with tusks and muscular build."},
+    "skeleton": {"health": 70, "attack": 15, "defense": 3, "exp": 15, 
+                "description": "An animated pile of bones that rattles menacingly."},
+    "wolf": {"health": 65, "attack": 20, "defense": 4, "exp": 15, 
+             "description": "A fierce predator with sharp teeth and quick reflexes."},
+    
+    # Intermediate enemies
+    "troll": {"health": 140, "attack": 25, "defense": 15, "exp": 30, 
+              "description": "A large, brutish creature with regenerative abilities."},
+    "bandit": {"health": 90, "attack": 22, "defense": 12, "exp": 25, 
+               "description": "A human outlaw armed with sharp daggers."},
+    "giant_spider": {"health": 110, "attack": 18, "defense": 10, "exp": 25, 
+                    "description": "A venomous arachnid that shoots sticky webs."},
+    
+    # Advanced enemies
+    "golem": {"health": 180, "attack": 20, "defense": 25, "exp": 40, 
+              "description": "A massive animate statue made of stone."},
+    "dark_knight": {"health": 160, "attack": 30, "defense": 20, "exp": 45, 
+                   "description": "A skilled warrior in black armor with a cursed sword."},
+    "necromancer": {"health": 130, "attack": 35, "defense": 10, "exp": 45, 
+                   "description": "A sinister spellcaster who commands the dead."},
+    
+    # Boss enemies
+    "dragon": {"health": 250, "attack": 40, "defense": 25, "exp": 100, 
+               "description": "A massive reptile that breathes fire and has impenetrable scales."},
+    "demon": {"health": 220, "attack": 45, "defense": 20, "exp": 90, 
+              "description": "A fiendish entity from another plane with burning eyes."},
+    "ancient_lich": {"health": 200, "attack": 50, "defense": 15, "exp": 90, 
+                    "description": "An undead sorcerer of immense power and age."}
+}
+
+# Group enemies by difficulty
+enemy_tiers = {
+    "easy": ["goblin", "skeleton", "wolf"],
+    "medium": ["orc", "bandit", "giant_spider"],
+    "hard": ["troll", "golem", "dark_knight", "necromancer"],
+    "boss": ["dragon", "demon", "ancient_lich"]
+}
+
+def select_enemy_by_difficulty():
+    """Select an enemy based on current difficulty level"""
+    difficulty = game_state["difficulty_level"]
+    
+    if difficulty <= 3:
+        tier = "easy"
+    elif difficulty <= 7:
+        tier = "medium"
+    elif difficulty <= 12:
+        tier = random.choice(["medium", "hard"])
+    elif difficulty <= 15:
+        tier = "hard"
+    else:
+        # After level 15, mix in bosses
+        if game_state["difficulty_level"] % 5 == 0:  # Every 5 levels is a boss
+            tier = "boss"
+        else:
+            tier = random.choice(["hard", "hard", "medium"])  # More weight on hard enemies
+    
+    enemy_type = random.choice(enemy_tiers[tier])
+    return enemy_type
+
+def start_new_battle():
+    """Start a new battle with an enemy appropriate to player's progress"""
+    # Restore some player health between battles
+    health_restore = min(20, game_state["player"]["max_health"] - game_state["player"]["health"])
+    game_state["player"]["health"] += health_restore
+    
+    # Occasionally restore a healing potion
+    if random.random() < 0.3 and game_state["player"]["heal_uses"] < 3:
+        game_state["player"]["heal_uses"] += 1
+        potion_found = True
+    else:
+        potion_found = False
+    
+    # Select enemy based on difficulty
+    enemy_type = select_enemy_by_difficulty()
+    
+    # Create a copy of the enemy to avoid modifying the template
+    enemy_data = enemies[enemy_type].copy()
+    
+    # Scale enemy based on difficulty
+    difficulty_multiplier = 1.0 + (game_state["difficulty_level"] * 0.1)
+    enemy_data["health"] = int(enemy_data["health"] * difficulty_multiplier)
+    enemy_data["attack"] = int(enemy_data["attack"] * difficulty_multiplier)
+    
+    # Update game state
+    game_state["enemy"] = enemy_data
+    game_state["enemy_type"] = enemy_type
+    game_state["turn"] = "player"
+    
+    # Return battle information
+    battle_info = {
+        "enemy_type": enemy_type,
+        "enemy_description": enemy_data["description"],
+        "health_restored": health_restore,
+        "potion_found": potion_found
+    }
+    
+    return battle_info
+
+def calculate_damage(attacker, defender):
+    """Calculate and apply damage with improved formula"""
+    base_damage = max(0, attacker["attack"] - defender["defense"])
+    variance = random.randint(-5, 5)
+    # Ensure at least 1 damage, but no more than 80% of target's current health
+    damage = min(max(1, base_damage + variance), int(defender["health"] * 0.8) + 1)
+    defender["health"] = max(0, defender["health"] - damage)  # Prevent negative health
+    return damage
+
+def enemy_action():
+    """Determine and execute enemy action with improved AI"""
+    enemy = game_state["enemy"]
+    player = game_state["player"]
+    
+    # Enemy behavior changes based on health percentage
+    health_percentage = enemy["health"] / enemy.get("max_health", enemy["health"]) * 100
+    
+    # Critical health - high chance to heal if available
+    if health_percentage < 25 and random.random() < 0.6:
+        heal_amount = int(enemy["health"] * 0.3)  # Heal 30% of current max health
+        enemy["health"] += heal_amount
+        return f"The {game_state['enemy_type']} uses a healing ability and recovers {heal_amount} health!"
+    
+    # Low health - might try to heal or attack desperately
+    elif health_percentage < 40 and random.random() < 0.3:
+        heal_amount = int(enemy["health"] * 0.2)  # Heal 20% of current max health
+        enemy["health"] += heal_amount
+        return f"The {game_state['enemy_type']} licks its wounds and recovers {heal_amount} health!"
+    
+    # Player low health - more aggressive attacks
+    elif player["health"] < 30 and random.random() < 0.7:
+        damage_bonus = int(enemy["attack"] * 0.2)  # 20% damage bonus for finishing move
+        total_attack = enemy["attack"] + damage_bonus
+        damage = calculate_damage({"attack": total_attack, "defense": enemy["defense"]}, player)
+        return f"The {game_state['enemy_type']} sees your weakness and unleashes a powerful attack for {damage} damage!"
+    
+    # Default attack
+    else:
+        damage = calculate_damage(enemy, player)
+        return f"The {game_state['enemy_type']} attacks you for {damage} damage!"
+
+def player_turn(action):
+    """Process player's turn with enhanced actions"""
+    result = ""
+    success = True
+    
+    if action == "attack":
+        # Critical hit chance (15%)
+        if random.random() < 0.15:
+            crit_multiplier = 1.5
+            effective_attack = int(game_state["player"]["attack"] * crit_multiplier)
+            damage = calculate_damage({"attack": effective_attack, "defense": game_state["player"]["defense"]}, game_state["enemy"])
+            result = f"CRITICAL HIT! You attacked for {damage} damage!"
+        else:
+            damage = calculate_damage(game_state["player"], game_state["enemy"])
+            result = f"You attacked for {damage} damage!"
+            
+    elif action == "defend":
+        # Store original defense for reset later
+        game_state["player"]["original_defense"] = game_state["player"]["defense"]
+        defense_boost = int(game_state["player"]["defense"] * 0.5)  # 50% defense boost
+        game_state["player"]["defense"] += defense_boost
+        
+        # Small health recovery while defending
+        health_recovery = int(game_state["player"]["max_health"] * 0.05)  # 5% health recovery
+        game_state["player"]["health"] = min(game_state["player"]["health"] + health_recovery, game_state["player"]["max_health"])
+        
+        result = f"You take a defensive stance (+{defense_boost} defense) and recover {health_recovery} health!"
+        
+    elif action == "heal":
+        if game_state["player"]["heal_uses"] > 0:
+            heal_amount = int(game_state["player"]["max_health"] * 0.4)  # 40% of max health
+            game_state["player"]["health"] = min(game_state["player"]["health"] + heal_amount, game_state["player"]["max_health"])
+            game_state["player"]["heal_uses"] -= 1
+            result = f"You used a healing potion for {heal_amount} health! ({game_state['player']['heal_uses']} potions remaining)"
+        else:
+            result = "No healing potions left!"
+            success = False  # Indicate action failed
+    else:
+        result = "Invalid action! Choose 'attack', 'defend', or 'heal'"
+        success = False  # Indicate action failed
+    
+    return result, success
+
+def display_status():
+    """Show current game status with enhanced information"""
+    print("\n" + "="*50)
+    print(f"BATTLE #{game_state['enemies_defeated'] + 1} | DIFFICULTY LEVEL: {game_state['difficulty_level']}")
+    print(f"ENEMY: {game_state['enemy_type'].upper()}")
+    print("="*50)
+    print(f"Player: Health {game_state['player']['health']}/{game_state['player']['max_health']}, Attack {game_state['player']['attack']}, Defense {game_state['player']['defense']}")
+    print(f"       Healing Potions: {game_state['player']['heal_uses']}")
+    print(f"Enemy:  Health {game_state['enemy']['health']}, Attack {game_state['enemy']['attack']}, Defense {game_state['enemy']['defense']}")
+    print(f"       {enemies[game_state['enemy_type']]['description']}")
+    print("="*50)
+
+def reward_player():
+    """Reward player after defeating an enemy"""
+    base_exp = game_state["enemy"].get("exp", 20)
+    
+    # Calculate rewards
+    exp_gained = base_exp + random.randint(1, 10)
+    
+    # Increase difficulty
+    game_state["difficulty_level"] += 1
+    
+    # Occasionally improve player stats
+    if game_state["enemies_defeated"] % 3 == 0:  # Every 3 enemies
+        stat_boost = random.choice(["health", "attack", "defense"])
+        
+        if stat_boost == "health":
+            game_state["player"]["max_health"] += 10
+            game_state["player"]["health"] += 10
+            boost_desc = "maximum health increased by 10"
+        elif stat_boost == "attack":
+            game_state["player"]["attack"] += 2
+            boost_desc = "attack increased by 2"
+        else:  # defense
+            game_state["player"]["defense"] += 1
+            boost_desc = "defense increased by 1"
+    else:
+        boost_desc = None
+    
+    return {
+        "exp": exp_gained,
+        "stat_boost": boost_desc
+    }
+
+def play_game():
+    """Main game loop with continuous battles"""
+    print("\n" + "*"*60)
+    print("*" + " "*19 + "ENDLESS MONSTER BATTLE" + " "*19 + "*")
+    print("*" + " "*58 + "*")
+    print("* Fight monsters until your inevitable defeat. How long will you last? *")
+    print("*"*60 + "\n")
+    
+    # Initialize player stats
+    game_state["player"] = {"health": 100, "max_health": 100, "attack": 20, "defense": 10, "heal_uses": 3}
+    game_state["enemies_defeated"] = 0
+    game_state["difficulty_level"] = 1
+    
+    # Start first battle
+    battle_info = start_new_battle()
+    print(f"A {battle_info['enemy_type']} appears before you!")
+    print(f"{battle_info['enemy_description']}")
+    
+    # Main game loop
+    playing = True
+    while playing:
+        display_status()
+        
+        # Player's turn
+        if game_state["turn"] == "player":
+            print("\nYour turn! What will you do?")
+            print("1. Attack - Strike the enemy")
+            print("2. Defend - Boost defense and recover some health")
+            print("3. Heal   - Use a healing potion (if available)")
+            print("Q. Quit   - Give up (you coward!)")
+            
+            user_input = input("\n> ").lower().strip()
+            
+            if user_input in ("q", "quit"):
+                print("\nYou flee from battle... Your adventure ends here.")
+                print(f"Total enemies defeated: {game_state['enemies_defeated']}")
+                playing = False
+                continue
+                
+            # Convert number input to action
+            if user_input == "1":
+                action = "attack"
+            elif user_input == "2":
+                action = "defend"
+            elif user_input == "3":
+                action = "heal"
+            else:
+                action = user_input
+                
+            # Process player action
+            result, success = player_turn(action)
+            print("\n" + result)
+            
+            if not success:
+                # Let player choose again
+                time.sleep(1)
+                continue
+                
+            # Check if enemy defeated
+            if game_state["enemy"]["health"] <= 0:
+                game_state["enemies_defeated"] += 1
+                print(f"\nVictory! You defeated the {game_state['enemy_type']}!")
+                
+                # Reward player
+                reward = reward_player()
+                print(f"You gained {reward['exp']} experience!")
+                
+                if reward["stat_boost"]:
+                    print(f"You feel stronger! Your {reward['stat_boost']}.")
+                
+                # Start next battle
+                time.sleep(1.5)
+                battle_info = start_new_battle()
+                
+                print("\n" + "-"*50)
+                print(f"You restored {battle_info['health_restored']} health between battles.")
+                
+                if battle_info['potion_found']:
+                    print("You found a healing potion!")
+                    
+                print(f"\nA {battle_info['enemy_type']} appears before you!")
+                print(f"{battle_info['enemy_description']}")
+                time.sleep(1)
+                continue
+                
+            # Switch to enemy turn
+            game_state["turn"] = "enemy"
+            time.sleep(0.5)
+            
+        # Enemy's turn
+        else:
+            # Reset defense if it was boosted
+            if "original_defense" in game_state["player"] and action != "defend":
+                game_state["player"]["defense"] = game_state["player"]["original_defense"]
+                
+            print("\nEnemy's turn!")
+            time.sleep(1)
+            result = enemy_action()
+            print(result)
+            
+            # Check if player defeated
+            if game_state["player"]["health"] <= 0:
+                print("\n" + "*"*60)
+                print("DEFEAT! You have been slain!")
+                print(f"You defeated {game_state['enemies_defeated']} enemies and reached difficulty level {game_state['difficulty_level']}.")
+                print("*"*60)
+                playing = False
+                continue
+                
+            # Switch back to player's turn
+            game_state["turn"] = "player"
+            time.sleep(1)
+
+# Run the game
+if __name__ == "__main__":
+    play_game()
